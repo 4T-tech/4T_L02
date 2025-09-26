@@ -1,8 +1,9 @@
-# 4T_L02
+<img width="2000" height="1500" alt="正面" src="https://github.com/user-attachments/assets/ddeede49-45b2-4506-ba94-06435fee1d72" /># 4T_L02
 
 单片机应用技术开发板硬件资料
 
-![Uploading image.png…]()
+<img width="1564" height="957" alt="image" src="https://github.com/user-attachments/assets/91a0ea50-ef83-481b-8d9e-c5e21c206e64" />
+
 
 ## 文件结构
 
