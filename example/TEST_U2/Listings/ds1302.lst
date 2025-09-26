@@ -1,0 +1,156 @@
+C51 COMPILER V9.60.7.0   DS1302                                                            01/21/2025 15:14:52 PAGE 1   
+
+
+C51 COMPILER V9.60.7.0, COMPILATION OF MODULE DS1302
+OBJECT MODULE PLACED IN .\Objects\ds1302.obj
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE ds1302.c COMPACT OPTIMIZE(8,SPEED) BROWSE INCDIR(..\TEST_U2) DEBUG OBJEC
+                    -TEXTEND PRINT(.\Listings\ds1302.lst) TABS(2) OBJECT(.\Objects\ds1302.obj)
+
+line level    source
+
+   1          #include "ds1302.h"
+   2          
+   3          
+   4          code unsigned char w_rtc_address[7]={0x80,0x82,0x84,0x86,0x88,0x8a,0x8c}; //秒分时日月周年
+   5          code unsigned char r_rtc_address[7]={0x81,0x83,0x85,0x87,0x89,0x8b,0x8d}; 
+   6          
+   7          RTC devRTC;
+   8          
+   9          //
+  10          RTC *GetRTCStruct(void)
+  11          {
+  12   1        return &devRTC;
+  13   1      }
+  14          
+  15          
+  16          /*
+  17          */
+  18          void Write_Ds1302_Byte(unsigned  char temp) 
+  19          {
+  20   1        unsigned char i;
+  21   1        for (i=0;i<8;i++)       
+  22   1        { 
+  23   2          SCK=0;
+  24   2          SDA=temp&0x01;
+  25   2          temp>>=1; 
+  26   2          SCK=1;
+  27   2        }
+  28   1      }   
+  29          
+  30          void Write_Ds1302( unsigned char address,unsigned char dat )     
+  31          {
+  32   1        RST=0;
+  33   1        _nop_();
+  34   1        SCK=0;
+  35   1        _nop_();
+  36   1        RST=1;  
+  37   1          _nop_();  
+  38   1        Write_Ds1302_Byte(address); 
+  39   1        Write_Ds1302_Byte(dat);   
+  40   1        RST=0; 
+  41   1      }
+  42          
+  43          unsigned char Read_Ds1302 ( unsigned char address )
+  44          {
+  45   1        unsigned char i,temp=0x00;
+  46   1        RST=0;
+  47   1        _nop_();
+  48   1        SCK=0;
+  49   1        _nop_();
+  50   1        RST=1;
+  51   1        _nop_();
+  52   1        Write_Ds1302_Byte(address);
+  53   1        for (i=0;i<8;i++)   
+  54   1        {   
+C51 COMPILER V9.60.7.0   DS1302                                                            01/21/2025 15:14:52 PAGE 2   
+
+  55   2          SCK=0;
+  56   2          temp>>=1; 
+  57   2          if(SDA)
+  58   2          temp|=0x80; 
+  59   2          SCK=1;
+  60   2        } 
+  61   1        RST=0;
+  62   1        _nop_();
+  63   1        RST=0;
+  64   1        SCK=0;
+  65   1        _nop_();
+  66   1        SCK=1;
+  67   1        _nop_();
+  68   1        SDA=0;
+  69   1        _nop_();
+  70   1        SDA=1;
+  71   1        _nop_();
+  72   1        return (temp);      
+  73   1      }
+  74          
+  75          /*
+  76          */
+  77          void ReadRTC(void)
+  78          {
+  79   1        unsigned char i, *p;
+  80   1        unsigned char tmp[3];
+  81   1        
+  82   1        p = (unsigned char *)r_rtc_address;   //地址传递
+  83   1        
+  84   1        for(i=0;i<3;i++){
+  85   2            tmp[i]=Read_Ds1302(*p);
+  86   2            p++;
+  87   2        }
+  88   1        
+  89   1        devRTC.rtc[0] = (tmp[2] >> 4);
+  90   1        devRTC.rtc[1] = (tmp[2] & 0x0F);
+  91   1        
+  92   1        devRTC.rtc[2] = (tmp[1] >> 4);
+  93   1        devRTC.rtc[3] = (tmp[1] & 0x0F);
+  94   1        
+  95   1        devRTC.rtc[4] = (tmp[0] >> 4);
+  96   1        devRTC.rtc[5] = (tmp[0] & 0x0F);
+  97   1      }
+  98          
+  99          /*
+ 100          */
+ 101          void SetRTC(void)
+ 102          {
+ 103   1        Write_Ds1302(0x8E,0X00);
+ 104   1        
+ 105   1        Write_Ds1302(w_rtc_address[0], (devRTC.set[4]<<4) | (devRTC.set[5]));
+ 106   1        Write_Ds1302(w_rtc_address[1], (devRTC.set[2]<<4) | (devRTC.set[3]));
+ 107   1        Write_Ds1302(w_rtc_address[2], (devRTC.set[0]<<4) | (devRTC.set[1]));
+ 108   1        
+ 109   1        Write_Ds1302(0x8E,0x80);
+ 110   1      }
+ 111          
+ 112          //
+ 113          void InitRTCStruct(void)
+ 114          {
+ 115   1        devRTC.set[0] = 2;
+ 116   1        devRTC.set[1] = 3;
+C51 COMPILER V9.60.7.0   DS1302                                                            01/21/2025 15:14:52 PAGE 3   
+
+ 117   1        devRTC.set[2] = 5;
+ 118   1        devRTC.set[3] = 9;
+ 119   1        devRTC.set[4] = 5;
+ 120   1        devRTC.set[5] = 0;
+ 121   1      
+ 122   1        devRTC.Read = ReadRTC;
+ 123   1        devRTC.Set = SetRTC;
+ 124   1        
+ 125   1      }
+ 126          
+ 127          
+ 128          
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    269    ----
+   CONSTANT SIZE    =     14    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =     16       3
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)
