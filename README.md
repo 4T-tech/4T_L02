@@ -1,18 +1,18 @@
-<img width="2000" height="1500" alt="正面" src="https://github.com/user-attachments/assets/ddeede49-45b2-4506-ba94-06435fee1d72" /># 4T_L02
+# 4T_L02
 
 单片机应用技术开发板硬件资料
 
-<img width="1564" height="957" alt="image" src="https://github.com/user-attachments/assets/91a0ea50-ef83-481b-8d9e-c5e21c206e64" />
-
+<img width="2000" height="1500" alt="正面" src="https://github.com/user-attachments/assets/ddeede49-45b2-4506-ba94-06435fee1d72" />
 
 ## 文件结构
 
 - do：”文档
-  - 单片机原理及接口技术开发板产品介绍
-  - 单片机原理及接口技术开发板规格书 
-  - 单片机原理及接口技术实验指导手册
+  - 单片机应用技术开发板产品介绍
+  - 单片机应用技术开发板规格书 
+  - 单片机应用技术实验指导手册
 - example：综合测试程序
-  - 综合测试程序
+  - U1综合测试程序
+  - U2综合测试程序
   - 测试程序介绍文件
 - datasheet：相关数据手册内容
   
