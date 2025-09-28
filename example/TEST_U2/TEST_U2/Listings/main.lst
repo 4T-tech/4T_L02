@@ -1,0 +1,355 @@
+C51 COMPILER V9.59.0.0   MAIN                                                              09/28/2025 13:36:41 PAGE 1   
+
+
+C51 COMPILER V9.59.0.0, COMPILATION OF MODULE MAIN
+OBJECT MODULE PLACED IN .\Objects\main.obj
+COMPILER INVOKED BY: D:\Keil5\Keil5.38\C51\BIN\C51.EXE main.c COMPACT OPTIMIZE(8,SPEED) BROWSE INCDIR(..\TEST_U2) DEBUG 
+                    -OBJECTEXTEND PRINT(.\Listings\main.lst) TABS(2) OBJECT(.\Objects\main.obj)
+
+line level    source
+
+   1          #include "stc12.h"
+   2          #include <intrins.h>
+   3          #include <string.h>
+   4          #include "ds18b20.h"
+   5          #include "at24c02.h"
+   6          #include "ds1302.h"
+   7          #include "pcf8591.h"
+   8          
+   9          /*
+  10          两个数码管    √
+  11          开机次数      √
+  12          RTC           √
+  13          8951          √
+  14          */
+  15          
+  16          
+  17          #define uint8_t  unsigned char
+  18          #define uint16_t unsigned int
+  19            
+  20          sbit S1 = P1^0;
+  21          sbit S2 = P1^1;
+  22          sbit S3 = P1^2;
+  23          sbit S4 = P1^3;
+  24          
+  25          uint8_t rom_data[8];
+  26          
+  27          uint8_t wake_times;
+  28          
+  29          uint8_t seg_number[]={0xc0,0xf9,0xa4,0xb0,0x99,0x92,0x82,0xf8,0x80,0x90,0x88,0x83,0xc6,0xa1,0x86,0x8e,0xbf
+             -};     //0～9、A～F的共阳极显示码
+  30          uint8_t seg_com[9] = {0xfe,0xfd,0xfb,0xf7,0xef,0xdf,0xbf,0x7f,0xff}; //从左到右
+  31          uint8_t seg_data[8] = {0};
+  32          
+  33          uint8_t adc_data;
+  34          
+  35          uint8_t key_status = 5;
+  36          uint8_t key_status_old;
+  37          
+  38          void uart_init();
+  39          void uart_send_data(uint8_t *tdata,uint8_t length);
+  40          void rom_code_c();
+  41          void delay_ms(uint16_t times);
+  42          void seg_dispaly(uint8_t *tdata,uint8_t com_control);
+  43          void seg_serial();
+  44          uint8_t at24c02_init();
+  45          void display_waketimes(uint8_t wake_times);
+  46          void display_ds1302(void);
+  47          void pcf8591_dac(uint8_t dac);
+  48          void pcf8591_adc(uint8_t channel);
+  49          void keyboart_check(void);
+  50          void task(uint8_t i);
+  51            
+  52          
+  53          void main()
+C51 COMPILER V9.59.0.0   MAIN                                                              09/28/2025 13:36:41 PAGE 2   
+
+  54          {
+  55   1        uint8_t i;
+  56   1        
+  57   1        uart_init();
+  58   1        
+  59   1        /* get wake times */
+  60   1        wake_times = at24c02_init();
+  61   1        
+  62   1        
+  63   1        /* serial seg display*/
+  64   1        seg_serial();
+  65   1      
+  66   1        /* rtc */
+  67   1        InitRTCStruct();
+  68   1        GetRTCStruct()->Set();
+  69   1        
+  70   1        /* 8591 */
+  71   1        InitPCF8591();
+  72   1        
+  73   1        while(1) 
+  74   1        {
+  75   2          keyboart_check();
+  76   2          task(i++);
+  77   2          
+  78   2          
+  79   2          
+  80   2        }
+  81   1      }
+  82          
+  83          void uart_init() 
+  84          { 
+  85   1        PCON &= 0x7F;   //波特率不倍速
+  86   1        SCON = 0x50;    //8位数据,可变波特率
+  87   1        TMOD &= 0x0F;   //设置定时器模式
+  88   1        TMOD |= 0x20;   //设置定时器模式
+  89   1        TL1 = 0xFD;     //设置定时初始值
+  90   1        TH1 = 0xFD;     //设置定时重载值
+  91   1        ET1 = 0;      //禁止定时器中断
+  92   1        TR1 = 1;      //定时器1开始计时
+  93   1      }
+  94          
+  95          void uart_send_data(uint8_t *tdata,uint8_t length)
+  96          {
+  97   1        uint8_t i;
+  98   1        for (i=0;i<length;i++)
+  99   1        {
+ 100   2          SBUF=*(tdata+i);      // 发送第i个数据
+ 101   2          while(TI==0);     // 查询等待发送是否完成
+ 102   2          TI=0;       // 发送完成，TI由软件清0
+ 103   2        }
+ 104   1      }
+ 105          
+ 106          
+ 107          void delay_ms(uint16_t times) //@11.0592MHz
+ 108          {
+ 109   1        uint8_t i, j;
+ 110   1        uint16_t k;
+ 111   1        for(k=0;k<times;k++)
+ 112   1        {
+ 113   2          _nop_();
+ 114   2          i = 11;
+ 115   2          j = 190;
+C51 COMPILER V9.59.0.0   MAIN                                                              09/28/2025 13:36:41 PAGE 3   
+
+ 116   2          do
+ 117   2          {
+ 118   3            while (--j);
+ 119   3          } while (--i);
+ 120   2        }
+ 121   1      }
+ 122          /*
+ 123          tdata  seg_data 
+ 124          com_control   0x1111_1111  all on
+ 125                        0x0000_1111  half on
+ 126          eg.
+ 127              output  1_95_533
+ 128              input   tdata[8] = {1,x,9,5,x,5,3,3}
+ 129                      com_control   = 0x10110111;
+ 130          */
+ 131          void seg_dispaly(uint8_t *tdata,uint8_t com_control)
+ 132          {
+ 133   1        uint8_t i; 
+ 134   1        
+ 135   1        for(i=0;i<8;i++) //遍历com
+ 136   1        {
+ 137   2          P0=0xff;      //关显示
+ 138   2          P20 = 0;      //写com
+ 139   2          if((com_control>>(7-i)& 0x01) == 1)
+ 140   2          {
+ 141   3            P0=~seg_com[i]; //位选码送位控制口P0口 
+ 142   3          }
+ 143   2          else
+ 144   2          {
+ 145   3            P0=~seg_com[8];
+ 146   3          }
+ 147   2          P20 = 1;
+ 148   2          P0=seg_number[*(tdata+i)];                  //显示字型码送P1口
+ 149   2          delay_ms(1);  
+ 150   2        }
+ 151   1        
+ 152   1      }
+ 153          
+ 154          void seg_serial()
+ 155          {
+ 156   1        uint8_t i;
+ 157   1        P23 = 0;
+ 158   1        SCON=0x00;          //设串行口方式0
+ 159   1        P23 = 1;
+ 160   1        for (i=0;i<0x10;i++)    
+ 161   1        { 
+ 162   2          SBUF=seg_number[i];     //送显示数据
+ 163   2          TI=0;
+ 164   2          while(!TI);     //等待发送完毕
+ 165   2          delay_ms(400);
+ 166   2        }
+ 167   1        SBUF=seg_number[16];      //送显示数据
+ 168   1        TI=0;
+ 169   1        while(!TI);     //等待发送完毕
+ 170   1        SBUF=seg_number[16];      //送显示数据
+ 171   1        TI=0;
+ 172   1        while(!TI);     //等待发送完毕
+ 173   1      }
+ 174          
+ 175          uint8_t at24c02_init()
+ 176          {
+ 177   1        /*用数码管显示开机次数，模拟i2c另外文件*/
+C51 COMPILER V9.59.0.0   MAIN                                                              09/28/2025 13:36:41 PAGE 4   
+
+ 178   1        unsigned char times;
+ 179   1        times = read_AT24C02(254);
+ 180   1        delay_ms(100);  
+ 181   1        if(times < 255 )
+ 182   1        {
+ 183   2            times=times+1;
+ 184   2            write_AT24C02(254,times);
+ 185   2        }
+ 186   1        else
+ 187   1        {
+ 188   2          times = 1;
+ 189   2          write_AT24C02(254,times);
+ 190   2          
+ 191   2        }
+ 192   1        return times;
+ 193   1        
+ 194   1      }
+ 195          
+ 196          void display_waketimes(uint8_t wake_times)
+ 197          {
+ 198   1        seg_data[5] = wake_times/100;
+ 199   1        seg_data[6] = wake_times%100/10;
+ 200   1        seg_data[7] = wake_times%100%10;
+ 201   1        if(seg_data[5]>0) seg_dispaly(seg_data,0x07);
+ 202   1        else if(seg_data[5]==0 && seg_data[6]>0) seg_dispaly(seg_data,0x03);
+ 203   1        else if(seg_data[5]==0 && seg_data[6]==0) seg_dispaly(seg_data,0x01);
+ 204   1      }
+ 205          
+ 206          void display_ds1302(void)
+ 207          {
+ 208   1        GetRTCStruct()->Read();
+ 209   1        seg_data[0] = GetRTCStruct()->rtc[0];
+ 210   1        seg_data[1] = GetRTCStruct()->rtc[1];
+ 211   1        seg_data[2] = 16;
+ 212   1        seg_data[3] = GetRTCStruct()->rtc[2];
+ 213   1        seg_data[4] = GetRTCStruct()->rtc[3];
+ 214   1        seg_data[5] = 16;
+ 215   1        seg_data[6] = GetRTCStruct()->rtc[4];
+ 216   1        seg_data[7] = GetRTCStruct()->rtc[5];
+ 217   1      
+ 218   1        seg_dispaly(seg_data,0xff);
+ 219   1      }
+ 220          
+ 221          void pcf8591_dac(uint8_t dac)
+ 222          {
+ 223   1        SetDAC(dac);
+ 224   1        if(seg_data[5]>0) seg_dispaly(seg_data,0x07);
+ 225   1        else if(seg_data[5]==0 && seg_data[6]>0) seg_dispaly(seg_data,0x03);
+ 226   1        else if(seg_data[5]==0 && seg_data[6]==0) seg_dispaly(seg_data,0x01);
+ 227   1        
+ 228   1        seg_data[5] = dac/100;
+ 229   1        seg_data[6] = dac%100/10;
+ 230   1        seg_data[7] = dac%100%10;
+ 231   1      }
+ 232            
+ 233          void pcf8591_adc(uint8_t channel)
+ 234          {
+ 235   1        uint8_t i;
+ 236   1        for(i=0;i<5;i++)
+ 237   1        {
+ 238   2          if(seg_data[5]>0) seg_dispaly(seg_data,0x07);
+ 239   2          else if(seg_data[5]==0 && seg_data[6]>0) seg_dispaly(seg_data,0x03);
+C51 COMPILER V9.59.0.0   MAIN                                                              09/28/2025 13:36:41 PAGE 5   
+
+ 240   2          else if(seg_data[5]==0 && seg_data[6]==0) seg_dispaly(seg_data,0x01);
+ 241   2        }
+ 242   1        adc_data = GetADC(channel);
+ 243   1        seg_data[5] = adc_data/100;
+ 244   1        seg_data[6] = adc_data%100/10;
+ 245   1        seg_data[7] = adc_data%100%10;
+ 246   1      
+ 247   1      }
+ 248          void keyboart_check(void)
+ 249          {
+ 250   1         if(S1 == 0)
+ 251   1         {
+ 252   2           if(key_status_old == 1)
+ 253   2           {
+ 254   3             key_status = 1;
+ 255   3           }
+ 256   2           else
+ 257   2           {
+ 258   3             key_status_old = 1;
+ 259   3           }
+ 260   2           
+ 261   2         }
+ 262   1         else if(S2 == 0)
+ 263   1         {
+ 264   2           if(key_status_old == 2)
+ 265   2           {
+ 266   3             key_status = 2;
+ 267   3           }
+ 268   2           else
+ 269   2           {
+ 270   3             key_status_old = 2;
+ 271   3           }
+ 272   2           
+ 273   2         }
+ 274   1         
+ 275   1         else if(S3 == 0)
+ 276   1         {
+ 277   2           if(key_status_old == 3)
+ 278   2           {
+ 279   3             key_status = 3;
+ 280   3           }
+ 281   2           else
+ 282   2           {
+ 283   3             key_status_old = 3;
+ 284   3           }
+ 285   2           
+ 286   2         }
+ 287   1         else if(S4 == 0)
+ 288   1         {
+ 289   2           if(key_status_old == 4)
+ 290   2           {
+ 291   3             key_status = 4;
+ 292   3           }
+ 293   2           else
+ 294   2           {
+ 295   3             key_status_old = 4;
+ 296   3           }
+ 297   2         }
+ 298   1      }
+ 299          
+ 300          void task(uint8_t i)
+ 301          {
+C51 COMPILER V9.59.0.0   MAIN                                                              09/28/2025 13:36:41 PAGE 6   
+
+ 302   1        switch(key_status)
+ 303   1        {
+ 304   2          case 5:
+ 305   2            display_waketimes(wake_times);
+ 306   2            break;
+ 307   2          case 2:
+ 308   2            display_ds1302();
+ 309   2            break;
+ 310   2          case 3:
+ 311   2            pcf8591_dac(i);
+ 312   2            break;
+ 313   2          case 1:
+ 314   2            display_waketimes(wake_times);
+ 315   2          case 4:
+ 316   2            pcf8591_adc(1);
+ 317   2            break;
+ 318   2        }
+ 319   1      
+ 320   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    948    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =     46      14
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)
