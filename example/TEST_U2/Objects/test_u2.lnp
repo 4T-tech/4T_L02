@@ -1,9 +1,0 @@
-".\Objects\main.obj",
-".\Objects\ds18b20.obj",
-".\Objects\iic.obj",
-".\Objects\at24c02.obj",
-".\Objects\STARTUP.obj",
-".\Objects\ds1302.obj",
-".\Objects\pcf8591.obj" 
-TO ".\Objects\test_u2" 
-PRINT(".\Listings\test_u2.m51") RAMSIZE(256) 
