@@ -1,0 +1,135 @@
+C51 COMPILER V9.60.7.0   DS18B20                                                           01/21/2025 15:14:52 PAGE 1   
+
+
+C51 COMPILER V9.60.7.0, COMPILATION OF MODULE DS18B20
+OBJECT MODULE PLACED IN .\Objects\ds18b20.obj
+COMPILER INVOKED BY: C:\Keil_v5\C51\BIN\C51.EXE ds18b20.c COMPACT OPTIMIZE(8,SPEED) BROWSE INCDIR(..\TEST_U2) DEBUG OBJE
+                    -CTEXTEND PRINT(.\Listings\ds18b20.lst) TABS(2) OBJECT(.\Objects\ds18b20.obj)
+
+line level    source
+
+   1          #include "ds18b20.h"
+   2          
+   3          static unsigned char rom[8];
+   4          
+   5          //
+   6          void OneWireDelay(unsigned int t)  
+   7          {
+   8   1        unsigned char i;
+   9   1        while(t--){
+  10   2          for(i=0;i<12;i++);
+  11   2        }
+  12   1      }
+  13          
+  14          //
+  15          void Write_DS18B20(unsigned char dat)
+  16          {
+  17   1        unsigned char i;
+  18   1        for(i=0;i<8;i++)
+  19   1        {
+  20   2          DQ = 0;
+  21   2          DQ = dat&0x01;
+  22   2          OneWireDelay(5);
+  23   2          DQ = 1;
+  24   2          dat >>= 1;
+  25   2        }
+  26   1        OneWireDelay(5);
+  27   1      }
+  28          
+  29          //
+  30          unsigned char Read_DS18B20(void)
+  31          {
+  32   1        unsigned char i;
+  33   1        unsigned char dat;
+  34   1        
+  35   1        for(i=0;i<8;i++)
+  36   1        {
+  37   2          DQ = 0;
+  38   2          dat >>= 1;
+  39   2          DQ = 1;
+  40   2          if(DQ)
+  41   2          {
+  42   3            dat |= 0x80;
+  43   3          }     
+  44   2          OneWireDelay(5);
+  45   2        }
+  46   1        return dat;
+  47   1      }
+  48          
+  49          //
+  50          bit InitDS18B20(void)
+  51          {
+  52   1          bit initflag = 0;
+  53   1          
+  54   1          DQ = 1;
+C51 COMPILER V9.60.7.0   DS18B20                                                           01/21/2025 15:14:52 PAGE 2   
+
+  55   1          OneWireDelay(12);
+  56   1          DQ = 0;
+  57   1          OneWireDelay(80); 
+  58   1          DQ = 1;
+  59   1          OneWireDelay(10);  
+  60   1          initflag = DQ; 
+  61   1          OneWireDelay(5);
+  62   1        
+  63   1          return initflag;
+  64   1      }
+  65          
+  66          //ªÒ»°ROM±‡¬Î
+  67          void ReadRomCode(unsigned char *rom_code_bufff)
+  68          {
+  69   1        unsigned char index = 0;
+  70   1      
+  71   1        InitDS18B20();
+  72   1        Write_DS18B20(0x33);
+  73   1      
+  74   1        for(index=0; index<8;index++){
+  75   2          rom_code_bufff[index] = Read_DS18B20();
+  76   2        }
+  77   1      }
+  78          
+  79          //
+  80          float GetTemperature(void)
+  81          {
+  82   1          unsigned int temp;
+  83   1        float temperature;
+  84   1          unsigned char low,high;
+  85   1          InitDS18B20();
+  86   1          Write_DS18B20(0xCC);
+  87   1          Write_DS18B20(0x44); 
+  88   1        
+  89   1        /* update:2022??11??3??
+  90   1           ????DS18B20????????????????? 
+  91   1        */
+  92   1          OneWireDelay(700);
+  93   1          InitDS18B20();
+  94   1          Write_DS18B20(0xCC);
+  95   1          Write_DS18B20(0xBE); 
+  96   1      
+  97   1          low = Read_DS18B20(); 
+  98   1          high = Read_DS18B20();
+  99   1      
+ 100   1        temp = (high&0x0f);
+ 101   1        temp <<= 8;
+ 102   1        temp |= low;
+ 103   1        temperature = temp*0.0625;
+ 104   1          return temperature;
+ 105   1      }
+ 106          
+ 107          
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =    246    ----
+   CONSTANT SIZE    =   ----    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =      8       4
+   DATA SIZE        =   ----    ----
+   IDATA SIZE       =   ----    ----
+C51 COMPILER V9.60.7.0   DS18B20                                                           01/21/2025 15:14:52 PAGE 3   
+
+   BIT SIZE         =   ----       1
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)
